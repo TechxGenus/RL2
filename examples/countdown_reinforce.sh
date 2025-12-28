@@ -1,18 +1,22 @@
-torchrun \
-    --nproc_per_node=4 \
+CUDA_VISIBLE_DEVICES=2,3 torchrun \
+    --master_port=10086 \
+    --nproc_per_node=2 \
     -m RL2.trainer.ppo \
     rollout.train.path=train@Chenmien/Countdown \
-    rollout.train.prompts_per_rollout=128 \
-    rollout.train.responses_per_prompt=4 \
+    rollout.train.prompts_per_rollout=16 \
+    rollout.train.responses_per_prompt=8 \
     rollout.train.sampling_params.max_new_tokens=1024 \
     "rollout.train.sampling_params.stop=['</answer>']" \
     rollout.train.apply_chat_template=false \
     rollout.test.path=test@Chenmien/Countdown \
     rollout.env_path=envs/countdown.py \
-    actor.model_name=Qwen/Qwen2.5-3B-Instruct \
-    actor.max_length_per_device=8192 \
+    rollout.server_args.mem_fraction_static=0.2 \
+    actor.model_name=/data/share_weight/prog-150M/model/Qwen2.5-0.5B-Instruct \
+    actor.max_length_per_device=2048 \
+    actor.use_liger_kernel=true \
     trainer.project=Countdown \
     trainer.experiment_name=qwen2.5-3b_reinforce \
     trainer.total_steps=512 \
     trainer.test_freq=8 \
-    trainer.save_freq=32
+    trainer.save_freq=32 \
+    trainer.use_wandb=true
