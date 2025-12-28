@@ -257,6 +257,9 @@ class Rollout:
                 json={"tags": ["weights", "kv_cache"]}
             )
 
+        # Wait for all workers to complete memory release
+        dist.barrier(group=GLOO_GROUP)
+
         if dist.get_rank() != 0:
             return None, None
 
@@ -280,6 +283,8 @@ class Rollout:
 
         torch.cuda.empty_cache()
         dist.barrier(group=GLOO_GROUP)
+        # Add a small delay to ensure server is ready
+        await asyncio.sleep(0.5)
         # or resume_memory_occupation() may OOM
         if self.device_mesh["tp"].get_local_rank() == 0:
             await async_request(
@@ -287,6 +292,8 @@ class Rollout:
                 "resume_memory_occupation",
                 json={"tags": ["weights"]}
             )
+        # Wait for all workers to complete memory resume
+        dist.barrier(group=GLOO_GROUP)
 
         async def _update_tensor_bucket(
             dtype_to_named_tensors: Dict[torch.dtype, List[Tuple[str, torch.Tensor]]]

@@ -94,8 +94,18 @@ async def open_session():
 
     global SESSION
     SESSION = aiohttp.ClientSession(
-        connector=aiohttp.TCPConnector(limit=0),
-        timeout=aiohttp.ClientTimeout(total=None)
+        connector=aiohttp.TCPConnector(
+            limit=0,
+            limit_per_host=100,
+            force_close=False,
+            enable_cleanup_closed=True
+        ),
+        timeout=aiohttp.ClientTimeout(
+            total=None,
+            connect=60,
+            sock_read=300,
+            sock_connect=60
+        )
     )
 
 async def close_session():
@@ -105,23 +115,34 @@ async def async_request(
     url: str | List[str],
     endpoint: str,
     method: Literal["POST", "GET"] = "POST",
+    max_retries: int = 3,
+    retry_delay: float = 1.0,
     **kwargs
 ):
     if isinstance(url, list):
         return asyncio.gather(*(
-            async_request(u, endpoint, method, **kwargs)
+            async_request(u, endpoint, method, max_retries, retry_delay, **kwargs)
             for u in url
         ))
 
-    match method:
-        case "POST":
-            req_ctx = SESSION.post(f"{url}/{endpoint}", **kwargs)
-        case "GET":
-            req_ctx = SESSION.get(f"{url}/{endpoint}", **kwargs)
-
-    async with req_ctx as response:
-        response.raise_for_status()
+    for attempt in range(max_retries):
         try:
-            return await response.json(content_type=None)
-        except json.decoder.JSONDecodeError:
-            return await response.text()
+            match method:
+                case "POST":
+                    req_ctx = SESSION.post(f"{url}/{endpoint}", **kwargs)
+                case "GET":
+                    req_ctx = SESSION.get(f"{url}/{endpoint}", **kwargs)
+
+            async with req_ctx as response:
+                response.raise_for_status()
+                try:
+                    return await response.json(content_type=None)
+                except json.decoder.JSONDecodeError:
+                    return await response.text()
+        
+        except (aiohttp.ClientConnectionResetError, aiohttp.ClientOSError) as e:
+            if attempt < max_retries - 1:
+                await asyncio.sleep(retry_delay * (attempt + 1))
+                continue
+            else:
+                raise
