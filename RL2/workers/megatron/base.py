@@ -305,6 +305,7 @@ class MegatronWorker(Worker):
 
     def save_ckpt(self, save_dir: str):
 
+        os.makedirs(save_dir, exist_ok=True)
         self.save_model(f"{save_dir}/model")
         sharded_strategy = get_default_save_sharded_strategy("torch_dist")
         sharded_strategy = FullyParallelSaveStrategyWrapper(
@@ -320,6 +321,7 @@ class MegatronWorker(Worker):
 
     def save_model(self, save_dir: str):
 
+        os.makedirs(save_dir, exist_ok=True)
         self._load_model_to_gpu()
         self.bridge.save_hf_pretrained(self.model, save_dir)
         self._offload_model_to_cpu()

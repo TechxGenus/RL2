@@ -1,6 +1,7 @@
 from typing import ContextManager, Dict, Union, List, Optional, Any
 from omegaconf import OmegaConf, DictConfig
 from accelerate import init_empty_weights
+import os
 import torch
 from torch.nn.utils import clip_grad_norm_
 import torch.distributed as dist
@@ -203,6 +204,7 @@ class FSDPWorker(Worker):
 
     def save_ckpt(self, save_dir: str):
         
+        os.makedirs(save_dir, exist_ok=True)
         self.save_model(f"{save_dir}/model")
         dcp.save(
             self._get_ckpt(),
@@ -214,6 +216,7 @@ class FSDPWorker(Worker):
         state_dict = self._get_model_state_dict(full_state_dict=True)
         if dist.get_rank() == 0:
 
+            os.makedirs(save_dir, exist_ok=True)
             self.tokenizer.save_pretrained(save_dir)
             self.model.module.save_pretrained(
                 save_dir, state_dict=state_dict

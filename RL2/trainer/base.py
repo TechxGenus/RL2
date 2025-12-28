@@ -1,5 +1,6 @@
 from typing import Dict, Any, Sequence
 from omegaconf import OmegaConf, DictConfig
+import os
 import glob
 import torch.distributed as dist
 import torch.distributed.checkpoint as dcp
@@ -40,10 +41,10 @@ class Trainer:
                 wandb.log = lambda *args, **kwargs: None
 
     def _get_ckpt(self, step: int) -> Dict[str, Any]:
-        return {
-            "step": step,
-            "dataloader": self.train_dataloader.state_dict()
-        }
+        ckpt = {"step": step}
+        if hasattr(self, "train_dataloader"):
+            ckpt["dataloader"] = self.train_dataloader.state_dict()
+        return ckpt
 
     def load_ckpt(self, workers: Sequence[Worker]) -> int:
 
@@ -55,7 +56,8 @@ class Trainer:
 
         ckpt = self._get_ckpt(0)
         dcp.load(ckpt, checkpoint_id=f"{self.load_dir}/trainer")
-        self.train_dataloader.load_state_dict(ckpt["dataloader"])
+        if hasattr(self, "train_dataloader") and "dataloader" in ckpt:
+            self.train_dataloader.load_state_dict(ckpt["dataloader"])
         return ckpt["step"]
 
     def save_ckpt(self, workers: Sequence[Worker], step: int):
@@ -64,6 +66,7 @@ class Trainer:
             return
 
         save_dir = f"{self.config.trainer.save_dir}/step{step}"
+        os.makedirs(save_dir, exist_ok=True)
         for worker in workers:
             worker_name = "actor" if "Actor" in worker.__class__.__name__ else "critic"
             worker.save_ckpt(f"{save_dir}/{worker_name}")
@@ -79,6 +82,7 @@ class Trainer:
         if self.config.trainer.save_freq is not None:
             save_dir += "/latest"
         
+        os.makedirs(save_dir, exist_ok=True)
         for worker in workers:
             worker_name = "actor" if "Actor" in worker.__class__.__name__ else "critic"
             worker.save_model(f"{save_dir}/{worker_name}")
